@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style type="text/css">
+body{
+    line-height:1.6;
+    font-size:18px;
+    color:#eee;
+    background-color:#222;
+}
+canvas {
+  width: 512px;
+  height: 512px;
+  image-rendering: pixelated;
+}
+</style>
+</head>
+<body>
+<input id="uuid-text" placeholder="f81d4fae-7dec-11d0-a765-00a0c91e6bf6" />
+<div id="error-output"></div>
+<canvas id="uuid-img" width="16" height="16" />
+</body>
+<script>    
+const W = 16;
+const H = 16;
+
+const input = document.getElementById("uuid-text")
+const errorOutput = document.getElementById("error-output")
+const ctx = document.getElementById("uuid-img").getContext("2d");
+
+const PER_BYTE = 8
+
+const BIT_COUNT = 128
+const BYTE_COUNT = BIT_COUNT / PER_BYTE
+
+const OK = "OK"
+const ERR = "ERR"
+
+const ok = (value) => ({kind: OK, value})
+const err = (message) => ({kind: ERR, value: message ? (typeof message === "string" ? message : JSON.stringify(message)) : "No error message provided"})
+
+const parse = (uuidString) => {
+    const output = new Uint8ClampedArray(BYTE_COUNT);
+    
+    let outputI = 0
+    let shiftAmount = 0
+    
+    let octet = 0
+    for (c of uuidString) {
+        // Little endian: least significant bits first becasue 
+        // shiftAmount starts off 0
+        switch (c) {
+            case "0":
+                // already 0
+            break
+            case "1":
+                octet |= 1 << shiftAmount
+            break
+            case "2":
+                octet |= 2 << shiftAmount
+            break
+            case "3":
+                octet |= 3 << shiftAmount
+            break
+            case "4":
+                octet |= 4 << shiftAmount
+            break
+            case "5":
+                octet |= 5 << shiftAmount
+            break
+            case "6":
+                octet |= 6 << shiftAmount
+            break
+            case "7":
+                octet |= 7 << shiftAmount
+            break
+            case "8":
+                octet |= 8 << shiftAmount
+            break
+            case "9":
+                octet |= 9 << shiftAmount
+            break
+            case "a":
+            case "A":
+                octet |= 10 << shiftAmount
+            break
+            case "b":
+            case "B":
+                octet |= 11 << shiftAmount
+            break
+            case "c":
+            case "C":
+                octet |= 12 << shiftAmount
+            break
+            case "d":
+            case "D":
+                octet |= 13 << shiftAmount
+            break
+            case "e":
+            case "E":
+                octet |= 14 << shiftAmount
+            break
+            case "f":
+            case "F":
+                octet |= 15 << shiftAmount
+            break
+            case "\r":
+            case "\n":
+            case "\t":
+            case " ":
+            case "-":
+                continue
+            default:
+                return err("Unexpected character: " + c)
+        }
+        
+        if (shiftAmount) {
+            output[outputI] = octet;
+            outputI += 1
+
+            octet = 0
+            shiftAmount = 0
+        } else {
+            if (outputI >= BYTE_COUNT) {
+                return err("too many bytes: " + outputI + ".5")
+            }
+            
+            shiftAmount = 4
+        }
+    }
+
+    if (outputI < BYTE_COUNT) {
+        return err("not enough bytes: " + outputI + (shiftAmount ? ".5" : ""))
+    }
+    
+    return ok(output)
+}
+
+const render = (uuidString) => {
+    const result = parse(uuidString)
+
+    const imgData = ctx.createImageData(W, H);
+
+    switch (result.kind) {
+        default:
+        case ERR:
+            errorOutput.innerText = result.value
+
+            for (let i = 0; i < imgData.data.length; i += 4) {
+                imgData.data[i] = 128
+                imgData.data[i + 1] = 128
+                imgData.data[i + 2] = 128
+                imgData.data[i + 3] = 255
+            }
+        break;
+        case OK:
+            errorOutput.innerText = ""
+        
+            const TEST_PATTERN = false
+            // TODO make this toggleable
+            if (TEST_PATTERN) {
+                // Fill with 0xFF00FF to prove we touch every pixel
+                for (let imgDataI = 0; imgDataI < imgData.data.length; imgDataI += 4) {
+                    imgData.data[imgDataI] = 255
+                    imgData.data[imgDataI + 1] = 0
+                    imgData.data[imgDataI + 2] = 255
+                    imgData.data[imgDataI + 3] = 255
+                }
+
+                const SKIP_K = 15 * 4
+                let skip = 4
+                let topI = 0
+                let bottomI = imgData.data.length - 4
+
+                while (topI < (imgData.data.length - 16 * 4)) {
+                    //ctx.putImageData(imgData, 0, 0);
+
+                    imgData.data[topI] = 0x33
+                    imgData.data[topI + 1] = 0x52
+                    imgData.data[topI + 2] = 0xE1
+                    imgData.data[topI + 3] = 255
+
+                    imgData.data[bottomI] = 0x53
+                    imgData.data[bottomI + 1] = 0x33
+                    imgData.data[bottomI + 2] = 0x54
+                    imgData.data[bottomI + 3] = 255
+
+                    if (topI === BIT_COUNT * 4) {
+                        skip += 4
+                    }
+                    if (topI >= BIT_COUNT * 4 && (topI + 4) % SKIP_K === 0) {
+                        topI += skip
+                        bottomI -= skip
+                        skip += 4
+                    } else if (topI > 0 && (topI % SKIP_K) === 0) {
+                        topI += skip
+                        bottomI -= skip
+                        skip += 4
+                    } else {
+                        topI += 4
+                        bottomI -= 4
+                    }
+                }
+            } else {
+                const SKIP_K = 15 * 4
+                let skip = 4
+                let topI = 0
+                let bottomI = imgData.data.length - 4
+
+                for (let byteI = 0; byteI < result.value.length; byteI += 1) {
+                    let bits = result.value[byteI]
+                    
+                    for (let bitI = 0; bitI < PER_BYTE; bitI += 1) {
+                        if (bits & 1) {
+                            imgData.data[topI] = 255
+                            imgData.data[topI + 1] = 255
+                            imgData.data[topI + 2] = 255
+                            imgData.data[topI + 3] = 255
+                            
+                            imgData.data[bottomI] = 255
+                            imgData.data[bottomI + 1] = 255
+                            imgData.data[bottomI + 2] = 255
+                            imgData.data[bottomI + 3] = 255
+                        } else {
+                            imgData.data[topI] = 0
+                            imgData.data[topI + 1] = 0
+                            imgData.data[topI + 2] = 0
+                            imgData.data[topI + 3] = 255
+                            
+                            imgData.data[bottomI] = 0
+                            imgData.data[bottomI + 1] = 0
+                            imgData.data[bottomI + 2] = 0
+                            imgData.data[bottomI + 3] = 255
+                        }
+                        bits >>= 1
+                        
+                        if (topI === BIT_COUNT * 4) {
+                            skip += 4
+                        }
+                        if (topI >= BIT_COUNT * 4 && (topI + 4) % SKIP_K === 0) {
+                            topI += skip
+                            bottomI -= skip
+                            skip += 4
+                        } else if (topI > 0 && (topI % SKIP_K) === 0) {
+                            topI += skip
+                            bottomI -= skip
+                            skip += 4
+                        } else {
+                            topI += 4
+                            bottomI -= 4
+                        }
+                    } 
+                }
+            }
+
+        break;  
+    }
+
+    // TODO Make it easy to download the image at original size
+    ctx.putImageData(imgData, 0, 0);
+}
+
+input.addEventListener("keyup", () => render(input.value));
+
+render(input.value || input.placeholder)
+
+</script>
+</html>
