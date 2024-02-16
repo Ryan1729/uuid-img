@@ -2,7 +2,7 @@
 <html>
 <head>
 <style type="text/css">
-body{
+body, input {
     line-height:1.6;
     font-size:18px;
     color:#eee;
@@ -13,17 +13,22 @@ canvas {
   height: 512px;
   image-rendering: pixelated;
 }
+input {
+  font-family: monospace;
+  margin-bottom: 1ex;
+}
 </style>
 </head>
 <body>
-<input id="uuid-text" placeholder="f81d4fae-7dec-11d0-a765-00a0c91e6bf6" />
+<input id="uuid-text" placeholder="f81d4fae-7dec-11d0-a765-00a0c91e6bf6" size=36 />
 <div id="error-output"></div>
 <canvas id="uuid-img" width="16" height="16" />
 </body>
-<script>    
+<script>
 const W = 16;
 const H = 16;
 
+// TODO allow sharing links that contain the UUID that prefill the input
 const input = document.getElementById("uuid-text")
 const errorOutput = document.getElementById("error-output")
 const ctx = document.getElementById("uuid-img").getContext("2d");
@@ -41,13 +46,13 @@ const err = (message) => ({kind: ERR, value: message ? (typeof message === "stri
 
 const parse = (uuidString) => {
     const output = new Uint8ClampedArray(BYTE_COUNT);
-    
+
     let outputI = 0
     let shiftAmount = 0
-    
+
     let octet = 0
     for (c of uuidString) {
-        // Little endian: least significant bits first becasue 
+        // Little endian: least significant bits first becasue
         // shiftAmount starts off 0
         switch (c) {
             case "0":
@@ -113,7 +118,7 @@ const parse = (uuidString) => {
             default:
                 return err("Unexpected character: " + c)
         }
-        
+
         if (shiftAmount) {
             output[outputI] = octet;
             outputI += 1
@@ -124,7 +129,7 @@ const parse = (uuidString) => {
             if (outputI >= BYTE_COUNT) {
                 return err("too many bytes: " + outputI + ".5")
             }
-            
+
             shiftAmount = 4
         }
     }
@@ -132,7 +137,7 @@ const parse = (uuidString) => {
     if (outputI < BYTE_COUNT) {
         return err("not enough bytes: " + outputI + (shiftAmount ? ".5" : ""))
     }
-    
+
     return ok(output)
 }
 
@@ -145,6 +150,7 @@ const render = (uuidString) => {
         default:
         case ERR:
             errorOutput.innerText = result.value
+            window.history.replaceState({}, "", window.location.pathname);
 
             for (let i = 0; i < imgData.data.length; i += 4) {
                 imgData.data[i] = 128
@@ -155,7 +161,25 @@ const render = (uuidString) => {
         break;
         case OK:
             errorOutput.innerText = ""
-        
+            let newURL = window.location.pathname
+            newURL += "?"
+            for (let i = 0; i < result.value.length; i += 1) {
+                const n = result.value[i]
+
+                newURL += (n & 0xF).toString(16)
+                newURL += (n >> 4).toString(16)
+                switch (i) {
+                    case 3:
+                    case 5:
+                    case 7:
+                    case 9:
+                        newURL += '-'
+                }
+            }
+
+            window.location.pathname
+            window.history.replaceState({}, "", newURL);
+
             const TEST_PATTERN = false
             // TODO make this toggleable
             if (TEST_PATTERN) {
@@ -209,14 +233,14 @@ const render = (uuidString) => {
 
                 for (let byteI = 0; byteI < result.value.length; byteI += 1) {
                     let bits = result.value[byteI]
-                    
+
                     for (let bitI = 0; bitI < PER_BYTE; bitI += 1) {
                         if (bits & 1) {
                             imgData.data[topI] = 255
                             imgData.data[topI + 1] = 255
                             imgData.data[topI + 2] = 255
                             imgData.data[topI + 3] = 255
-                            
+
                             imgData.data[bottomI] = 255
                             imgData.data[bottomI + 1] = 255
                             imgData.data[bottomI + 2] = 255
@@ -226,14 +250,14 @@ const render = (uuidString) => {
                             imgData.data[topI + 1] = 0
                             imgData.data[topI + 2] = 0
                             imgData.data[topI + 3] = 255
-                            
+
                             imgData.data[bottomI] = 0
                             imgData.data[bottomI + 1] = 0
                             imgData.data[bottomI + 2] = 0
                             imgData.data[bottomI + 3] = 255
                         }
                         bits >>= 1
-                        
+
                         if (topI === BIT_COUNT * 4) {
                             skip += 4
                         }
@@ -249,18 +273,26 @@ const render = (uuidString) => {
                             topI += 4
                             bottomI -= 4
                         }
-                    } 
+                    }
                 }
             }
 
-        break;  
+        break;
     }
 
     // TODO Make it easy to download the image at original size
+    // TODO? Colour options?
+    // TODO Optionally highlight the version and other non-randomized bits
     ctx.putImageData(imgData, 0, 0);
 }
 
 input.addEventListener("keyup", () => render(input.value));
+
+let initialValue = new URL(document.location).search.slice(1)
+
+if (initialValue) {
+    input.value = initialValue
+}
 
 render(input.value || input.placeholder)
 
