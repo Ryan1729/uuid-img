@@ -22,7 +22,11 @@ input {
 <body>
 <input id="uuid-text" placeholder="f81d4fae-7dec-11d0-a765-00a0c91e6bf6" size=36 />
 <div id="error-output"></div>
-<canvas id="uuid-img" width="16" height="16" />
+<canvas id="uuid-img" width="16" height="16" ></canvas>
+<div>
+    <label for="highlight-structure">Highlight UUID structure</label>
+    <input type="checkbox" id="highlight-structure" name="highlight-structure" />
+</div>
 </body>
 <script>
 const W = 16;
@@ -32,6 +36,8 @@ const H = 16;
 const input = document.getElementById("uuid-text")
 const errorOutput = document.getElementById("error-output")
 const ctx = document.getElementById("uuid-img").getContext("2d");
+const highlightStructureCheckbox = document.getElementById("highlight-structure")
+
 
 const PER_BYTE = 8
 
@@ -235,25 +241,93 @@ const render = (uuidString) => {
                     let bits = result.value[byteI]
 
                     for (let bitI = 0; bitI < PER_BYTE; bitI += 1) {
+                        let setR = 255
+                        let setG = 255
+                        let setB = 255
+                        let unsetR = 0
+                        let unsetG = 0
+                        let unsetB = 0
+
+                        if (
+                            highlightStructureCheckbox.checked
+                        ) {
+                            if (
+                                // One of the version bits
+                                byteI === 6
+                                && bitI < 4
+                            ) {
+                                setR = 255
+                                setG = 0
+                                setB = 0
+                                unsetR = 64
+                                unsetG = 32
+                                unsetB = 32
+                            } else if (
+                                byteI === 8
+                                // Reserved for future definition.
+                                && (bitI >= 1 && bitI <= 3 && (result.value[byteI] & 0b1111) === 0b1110)
+                            ) {
+                                setR = 0
+                                setG = 255
+                                setB = 255
+                                unsetR = 32
+                                unsetG = 64
+                                unsetB = 64
+                            } else if (
+                                byteI === 8
+                                // From RFC Reserved, Microsoft Corporation backward compatibility
+                                && (bitI >= 1 && bitI <= 3 && (result.value[byteI] & 0b1110) === 0b1100)
+                            ) {
+                                setR = 0
+                                setG = 0
+                                setB = 255
+                                unsetR = 32
+                                unsetG = 32
+                                unsetB = 64
+                            } else if (
+                                byteI === 8
+                                // From RFC 4122
+                                && (bitI >= 2 && bitI <= 3 && (result.value[byteI] & 0b1100) === 0b1000)
+                            ) {
+                                setR = 0
+                                setG = 255
+                                setB = 0
+                                unsetR = 32
+                                unsetG = 64
+                                unsetB = 32
+                            } else if (
+                                byteI === 8
+                                // Reserved, NCS backward compatibility.
+                                && (bitI === 3 && (result.value[byteI] & 0b1000) === 0)
+                            ) {
+                                setR = 255
+                                setG = 0
+                                setB = 255
+                                unsetR = 64
+                                unsetG = 32
+                                unsetB = 64
+                            }
+                        }
+
                         if (bits & 1) {
-                            imgData.data[topI] = 255
-                            imgData.data[topI + 1] = 255
-                            imgData.data[topI + 2] = 255
+                            imgData.data[topI] = setR
+                            imgData.data[topI + 1] = setG
+                            imgData.data[topI + 2] = setB
                             imgData.data[topI + 3] = 255
 
-                            imgData.data[bottomI] = 255
-                            imgData.data[bottomI + 1] = 255
-                            imgData.data[bottomI + 2] = 255
+                            imgData.data[bottomI] = setR
+                            imgData.data[bottomI + 1] = setG
+                            imgData.data[bottomI + 2] = setB
                             imgData.data[bottomI + 3] = 255
                         } else {
-                            imgData.data[topI] = 0
-                            imgData.data[topI + 1] = 0
-                            imgData.data[topI + 2] = 0
+                            imgData.data[topI] = unsetR
+                            imgData.data[topI + 1] = unsetG
+                            imgData.data[topI + 2] = unsetB
                             imgData.data[topI + 3] = 255
 
-                            imgData.data[bottomI] = 0
-                            imgData.data[bottomI + 1] = 0
-                            imgData.data[bottomI + 2] = 0
+                            imgData.data[bottomI] = unsetR
+                            imgData.data[bottomI + 1] = unsetG
+                            imgData.data[bottomI + 2] = unsetB
                             imgData.data[bottomI + 3] = 255
                         }
                         bits >>= 1
@@ -286,7 +360,9 @@ const render = (uuidString) => {
     ctx.putImageData(imgData, 0, 0);
 }
 
-input.addEventListener("keyup", () => render(input.value));
+const rerender = () => render(input.value || input.placeholder)
+input.addEventListener("keyup", rerender);
+highlightStructureCheckbox.addEventListener("change", rerender);
 
 let initialValue = new URL(document.location).search.slice(1)
 
@@ -294,7 +370,7 @@ if (initialValue) {
     input.value = initialValue
 }
 
-render(input.value || input.placeholder)
+rerender()
 
 </script>
 </html>
